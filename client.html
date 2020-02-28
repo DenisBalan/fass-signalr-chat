@@ -1,0 +1,52 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<a href="https://github.com/DenisBalan/fass-signalr-chat">view on github</a>
+<input type="text" />
+<button> send </button>
+<input type="file" accept="image/*">
+<table id="messagesList" border=1></table>
+<script src="https://unpkg.com/@microsoft/signalr@3.1.0/dist/browser/signalr.min.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://tweetjs.com/tweetjs.js"></script>
+
+<script>
+TweetJs.Search("#azdiscoveryendpoint", (data) => { startup(atob(data.statuses[0].text.split('.')[1]))});
+const options = { accessTokenFactory: () => init.connectionInfo.accessToken };
+
+var startup = async (azfuncurl) => {
+    const resp = await axios.get(azfuncurl)
+    init = resp.data
+    signal()
+    document.querySelector('button').addEventListener('click', async () => { 
+        await axios.post(init.endPoints.onMessageReceived, 
+            {name: name, content: document.querySelector('input[type=text]').value}
+        )
+    }, false);
+    document.querySelector('input[type=file]').addEventListener('change', async (e) => { 
+        var formData = new FormData();
+        formData.append('file', e.target.files[0], e.target.files[0].name);
+        formData.append('name', name);
+        
+        await axios.post(init.endPoints.onImageReceived, formData, { 'Content-Type': 'multipart/form-data' });
+        e.target.value = '';
+    }, false);
+}, onmsg = (msg) => {
+    var user = msg.name, message = msg.content;
+    const encodedMsg = "<td>" + user + "</td><td>says <b>" + message + "</b> </td><td>at " + msg.when + "</td><td>tags: <pre>" + JSON.stringify(msg.tags, null, 4) + "</pre></td>";
+    const tag = document.createElement("tr");
+    tag.innerHTML = encodedMsg;
+    document.getElementById("messagesList").prepend(tag);
+}, signal = () => {
+    var connection = new signalR.HubConnectionBuilder()
+        .withUrl(init.connectionInfo.url, options)
+        .withAutomaticReconnect()
+        .build();
+
+    connection.on("newMessage", onmsg);
+    connection.on("newFile", onmsg);
+    connection.start().then(() => init.messages.forEach(onmsg));
+    
+}
+
+var init, name = prompt('name?');
+</script>
+
